@@ -7,7 +7,7 @@ PKG_VERSION:=0.3.32
 PKG_RELEASE:=1
 
 LUCI_TITLE:=LuCI app for dae
-LUCI_DEPENDS:=+luci-base +dae +curl +ca-bundle
+LUCI_DEPENDS:=+luci-base +curl +ca-bundle
 LUCI_PKGARCH:=all
 
 PKG_LICENSE:=AGPL-3.0
