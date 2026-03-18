@@ -101,11 +101,88 @@ var statusWidget = baseclass.extend({
 				]),
 			]);
 
-			if (!s.version) return E("div", {}, [statusDiv]);
+			// ── Update buttons (определяем до проверки версии) ───────────
+			function startPolling(statusEl, btn, lockField, doneMsg) {
+				statusEl.textContent = "\u23f3 " + _("Updating...");
+				var timer = setInterval(function () {
+					getInitStatus(NAME).then(function (d) {
+						if (!((d && d[NAME]) || {})[lockField]) {
+							clearInterval(timer);
+							btn.disabled = false;
+							if (lockField === "dae_updating") {
+								statusEl.textContent = "\u2713 " + doneMsg + " \u2014 " + _("Reload the page to apply.");
+							} else {
+								statusEl.textContent = "\u2713 " + doneMsg;
+								// Обновляем дату geo баз
+								var st = (d && d[NAME]) || {};
+								var ts = Math.min(st.geoip_mtime || 0, st.geosite_mtime || 0);
+								if (ts && geoDateEl) {
+									geoDateEl.textContent = _("Updated: %s").format(fmtDate(ts));
+								}
+								setTimeout(function () { statusEl.textContent = ""; }, 4000);
+							}
+						}
+					});
+				}, 2000);
+			}
+
+			function updBtn(label, action, lockField, active) {
+				var statusEl = E("span", { style: "margin-left:8px;font-size:.85em;color:#888" }, "");
+				var btn = E("button", {
+					class: "btn cbi-button cbi-button-action",
+					click: function () {
+						btn.disabled = true;
+						_setInitAction(NAME, action).then(function (res) {
+							if (!res) {
+								statusEl.textContent = "\u26a0 " + _("Already running");
+								btn.disabled = false;
+								return;
+							}
+							startPolling(statusEl, btn, lockField,
+								action === "update" ? _("dae updated") : _("Geo databases updated"));
+						});
+					},
+				}, [_(label)]);
+				if (active) {
+					btn.disabled = true;
+					startPolling(statusEl, btn, lockField,
+						action === "update" ? _("dae updated") : _("Geo databases updated"));
+				}
+				return E("span", {}, [btn, statusEl]);
+			}
+
+			function fmtDate(ts) {
+				if (!ts || ts === 0) return _("never");
+				var d = new Date(ts * 1000);
+				return d.getFullYear() + "-" +
+					String(d.getMonth()+1).padStart(2,"0") + "-" +
+					String(d.getDate()).padStart(2,"0") + " " +
+					String(d.getHours()).padStart(2,"0") + ":" +
+					String(d.getMinutes()).padStart(2,"0");
+			}
+
+			var btn_gapl = E("span", {}, "\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0");
+
+			// Берём более раннюю из двух дат как время последнего обновления баз
+			var geoTs = Math.min(s.geoip_mtime || 0, s.geosite_mtime || 0);
+			var geoDateEl = E("span", {
+				style: "margin-left:8px;font-size:.85em;color:#888"
+			}, geoTs ? _("Updated: %s").format(fmtDate(geoTs)) : "");
+
+			var updDiv = E("div", { class: "cbi-value" }, [
+				E("label", { class: "cbi-value-title" }, _("Updates")),
+				E("div", { class: "cbi-value-field" }, [
+					updBtn("Update dae",           "update",     "dae_updating", s.dae_updating),
+					btn_gapl,
+					updBtn("Update Geo databases", "update_geo", "geo_updating", s.geo_updating),
+					geoDateEl,
+				]),
+			]);
+
+			if (!s.version) return E("div", {}, [statusDiv, updDiv]);
 
 			// ── Service control ───────────────────────────────────────────
-			var btn_gap  = E("span", {}, "\u00a0\u00a0");
-			var btn_gapl = E("span", {}, "\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0");
+			var btn_gap = E("span", {}, "\u00a0\u00a0");
 
 			var btn_start = E("button", {
 				class: "btn cbi-button cbi-button-apply", disabled: true,
@@ -147,27 +224,13 @@ var statusWidget = baseclass.extend({
 				},
 			}, [_("Disable")]);
 
-			// Кнопки по стандарту pbr/luci:
-			// когда disabled — Start/Restart/Stop недоступны
-			if (s.enabled) {
-				btn_enable.disabled  = true;
-				btn_disable.disabled = false;
-				if (s.running) {
-					btn_start.disabled   = true;
-					btn_restart.disabled = false;
-					btn_stop.disabled    = false;
-				} else {
-					btn_start.disabled   = false;
-					btn_restart.disabled = false;
-					btn_stop.disabled    = true;
-				}
-			} else {
-				btn_start.disabled   = true;
-				btn_restart.disabled = true;
-				btn_stop.disabled    = true;
-				btn_enable.disabled  = false;
-				btn_disable.disabled = true;
-			}
+			// enabled/disabled влияет только на кнопки Enable/Disable
+			// Start/Restart/Stop управляются только по running
+			btn_enable.disabled  = !!s.enabled;
+			btn_disable.disabled = !s.enabled;
+			btn_start.disabled   = !!s.running;
+			btn_restart.disabled = false;
+			btn_stop.disabled    = !s.running;
 
 			var ctrlDiv = E("div", { class: "cbi-value" }, [
 				E("label", { class: "cbi-value-title" }, _("Service Control")),
@@ -177,55 +240,6 @@ var statusWidget = baseclass.extend({
 					btn_stop, btn_gapl,
 					btn_enable, btn_gap,
 					btn_disable,
-				]),
-			]);
-
-			// ── Update buttons ────────────────────────────────────────────
-			function startPolling(statusEl, btn, lockField, doneMsg) {
-				statusEl.textContent = "\u23f3 " + _("Updating...");
-				var timer = setInterval(function () {
-					getInitStatus(NAME).then(function (d) {
-						if (!((d && d[NAME]) || {})[lockField]) {
-							clearInterval(timer);
-							statusEl.textContent = "\u2713 " + doneMsg;
-							btn.disabled = false;
-							setTimeout(function () { statusEl.textContent = ""; }, 4000);
-						}
-					});
-				}, 2000);
-			}
-
-			function updBtn(label, action, lockField, active) {
-				var statusEl = E("span", { style: "margin-left:8px;font-size:.85em;color:#888" }, "");
-				var btn = E("button", {
-					class: "btn cbi-button cbi-button-action",
-					click: function () {
-						btn.disabled = true;
-						_setInitAction(NAME, action).then(function (res) {
-							if (!res) {
-								statusEl.textContent = "\u26a0 " + _("Already running");
-								btn.disabled = false;
-								return;
-							}
-							startPolling(statusEl, btn, lockField,
-								action === "update" ? _("dae updated") : _("Geo databases updated"));
-						});
-					},
-				}, [_(label)]);
-				if (active) {
-					btn.disabled = true;
-					startPolling(statusEl, btn, lockField,
-						action === "update" ? _("dae updated") : _("Geo databases updated"));
-				}
-				return E("span", {}, [btn, statusEl]);
-			}
-
-			var updDiv = E("div", { class: "cbi-value" }, [
-				E("label", { class: "cbi-value-title" }, _("Updates")),
-				E("div", { class: "cbi-value-field" }, [
-					updBtn("Update dae",           "update",     "dae_updating", s.dae_updating),
-					btn_gapl,
-					updBtn("Update Geo databases", "update_geo", "geo_updating", s.geo_updating),
 				]),
 			]);
 

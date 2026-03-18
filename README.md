@@ -9,45 +9,37 @@ Fork of [Pacalini/luci-app-dae](https://github.com/Pacalini/luci-app-dae) with a
 ## Features
 
 - Service status and control (Start / Restart / Stop / Enable / Disable)
-- Config editor (`/etc/dae/config.dae`) with Save & Reload
-- **Update dae binary** — downloads latest release via installer script, inline progress
-- **Update Geo databases** — updates GeoIP + GeoSite, inline progress
+- Config editor with **Validate** and **Save** buttons
+- **Update dae binary** — downloads latest release, installs init.d if missing
+- **Update Geo databases** — updates GeoIP + GeoSite with last-updated timestamp
 - Live log viewer with auto-scroll and Clear button
+- Log size limited to 1MB (circular buffer)
 
-## Requirements
-
-- `dae` package installed (provides `/etc/init.d/dae`, `/usr/bin/dae`)
-- `curl`, `ca-bundle` for update functionality
-
-## Installation
-
-Download the latest `.ipk` from [Releases](../../releases) and install:
+## Installation (clean system, no dae required)
 
 ```sh
-opkg install /tmp/luci-app-dae_0.3.21-1_all.ipk
+opkg update
+opkg install curl ca-bundle
+opkg install /tmp/luci-app-dae_0.3.32-1_all.ipk
 ```
 
-Or force-downgrade if official repo package is installed:
+Open **Services → dae**, click **Update dae**, wait for completion, reload the page.  
+Then click **Update Geo databases**, edit config, click **Save**.
+
+## Upgrade from previous version
 
 ```sh
-opkg install --force-downgrade /tmp/luci-app-dae_0.3.21-1_all.ipk
+opkg install --force-downgrade /tmp/luci-app-dae_0.3.32-1_all.ipk
 ```
 
-Open **Services → dae** in LuCI.
+## If dae is installed from repository
 
-## Build IPK (no buildroot needed)
-
-```sh
-git clone https://github.com/YOUR_USERNAME/luci-app-dae
-cd luci-app-dae
-sh build.sh        # → dist/luci-app-dae_0.3.21-1_all.ipk
-```
-
-Requires: `sh`, `python3`, `tar`.
+Works as-is. The installer will not overwrite `/etc/init.d/dae` if it already exists.  
+Use **Update dae** button to upgrade the binary independently of opkg.
 
 ## sysupgrade
 
-Add to `/etc/sysupgrade.conf` to keep dae config and binary across upgrades:
+Add to `/etc/sysupgrade.conf` to preserve dae across firmware upgrades:
 
 ```
 /usr/bin/dae
@@ -55,21 +47,31 @@ Add to `/etc/sysupgrade.conf` to keep dae config and binary across upgrades:
 /etc/dae
 ```
 
+## Build IPK (no buildroot needed)
+
+```sh
+git clone https://github.com/YOUR_USERNAME/luci-app-dae
+cd luci-app-dae
+sh build.sh        # → dist/luci-app-dae_0.3.32-1_all.ipk
+```
+
+Requires: `sh`, `python3`, `tar`.
+
 ## File structure
 
 ```
-Makefile                                     OpenWrt buildroot integration
-build.sh                                     Manual IPK builder
+Makefile
+build.sh
 root/
-  etc/dae/config.dae                         Default config (edit before use)
+  etc/dae/config.dae                         Default config
   etc/uci-defaults/90_dae                    UCI init
   usr/libexec/rpcd/luci.dae                  RPC backend
-  usr/share/dae/installer.sh                 dae + geo installer/updater
-  usr/share/luci/menu.d/luci-app-dae.json    LuCI menu entry
-  usr/share/rpcd/acl.d/luci-app-dae.json     ACL permissions
+  usr/share/dae/installer.sh                 dae + geo + init.d installer
+  usr/share/luci/menu.d/luci-app-dae.json
+  usr/share/rpcd/acl.d/luci-app-dae.json
 www/
   luci-static/resources/dae/
-    status.js                                Status widget + control buttons
+    status.js                                Status + control + update buttons
     log.js                                   Log viewer
   luci-static/resources/view/dae/
     overview.js                              Main view

@@ -3,6 +3,7 @@
 'require form';
 'require rpc';
 'require fs';
+'require ui';
 "require dae.status as status";
 "require dae.log as log";
 
@@ -14,6 +15,11 @@ const setInitAction = rpc.declare({
 	method: "setInitAction",
 	params: ["name", "action"],
 	expect: { result: false },
+});
+
+const validateConfig = rpc.declare({
+	object: "luci." + NAME,
+	method: "validateConfig",
 });
 
 function writeConfig(section_id, value) {
@@ -53,7 +59,51 @@ return view.extend({
 		return Promise.all([stat.render(), m.render()]);
 	},
 
-	handleSave: null,
+	handleSave: function(ev) {
+		var maps = (document.getElementById('view') || E([])).querySelectorAll('.cbi-map');
+		return Promise.all(Array.prototype.map.call(maps, function(map) {
+			var m = L.dom.findClassInstance(map);
+			return m ? m.save() : Promise.resolve();
+		}));
+	},
+
 	handleSaveApply: null,
 	handleReset: null,
+
+	addFooter: function() {
+		var self = this;
+		var resultEl = E('span', { style: 'margin-left:12px;font-size:.9em;vertical-align:middle' }, '');
+
+		var validateBtn = E('button', {
+			'class': 'cbi-button cbi-button-neutral',
+			'click': function() {
+				validateBtn.disabled = true;
+				resultEl.style.color = '#888';
+				resultEl.textContent = '\u23f3 ' + _('Validating...');
+				validateConfig().then(function(res) {
+					validateBtn.disabled = false;
+					if (res && res.valid) {
+						resultEl.style.color = 'green';
+						resultEl.textContent = '\u2713 ' + _('Config is valid');
+					} else {
+						resultEl.style.color = 'red';
+						resultEl.textContent = '\u2717 ' + (res && res.message || _('Validation failed'));
+					}
+				}).catch(function(err) {
+					validateBtn.disabled = false;
+					resultEl.style.color = 'red';
+					resultEl.textContent = '\u2717 ' + String(err);
+				});
+			},
+		}, [_('Validate')]);
+
+		var saveBtn = E('button', {
+			'class': 'cbi-button cbi-button-save',
+			'click': L.bind(self.handleSave, self),
+		}, [_('Save')]);
+
+		return E('div', { 'class': 'cbi-page-actions' }, [
+			validateBtn, ' ', resultEl, ' ', saveBtn,
+		]);
+	},
 });

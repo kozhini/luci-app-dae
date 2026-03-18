@@ -4,7 +4,8 @@
 		"read": {
 			"ubus": {
 				"luci.dae": [
-					"getInitStatus"
+					"getInitStatus",
+					"validateConfig"
 				]
 			},
 			"file": {

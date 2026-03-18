@@ -2,10 +2,13 @@
 
 readonly NAME="dae"
 readonly PROG="/usr/bin/dae"
+readonly CONF="/etc/dae/config.dae"
 readonly LOG="/var/log/dae/dae.log"
 readonly INSTALLER="/usr/share/dae/installer.sh"
 readonly GEO_LOCK="/var/run/dae-geo-update.lock"
 readonly DAE_LOCK="/var/run/dae-update.lock"
+readonly GEOIP="/usr/share/dae/geoip.dat"
+readonly GEOSITE="/usr/share/dae/geosite.dat"
 
 . /lib/functions.sh
 . /usr/share/libubox/jshn.sh
@@ -45,20 +48,34 @@ get_init_status() {
 	else
 		json_add_boolean 'dae_updating' '0'
 	fi
+	# Время обновления geo баз (unix timestamp)
+	local geoip_mtime=0 geosite_mtime=0
+	[ -f "$GEOIP" ]    && geoip_mtime="$(date -r "$GEOIP" +%s 2>/dev/null || echo 0)"
+	[ -f "$GEOSITE" ]  && geosite_mtime="$(date -r "$GEOSITE" +%s 2>/dev/null || echo 0)"
+	json_add_int 'geoip_mtime' "$geoip_mtime"
+	json_add_int 'geosite_mtime' "$geosite_mtime"
 	json_close_object
 	json_dump
 	json_cleanup
 }
 
 set_init_action() {
-	local name="$1" action="$2" cmd
+	local name="$1" action="$2"
+	[ "$name" = "$NAME" ] || { print_json_bool "result" '0'; return; }
 	case "$action" in
 		enable|disable|start|stop|restart)
-			cmd="/etc/init.d/${name} ${action}"
+			if /etc/init.d/"$name" "$action" >/dev/null 2>&1; then
+				print_json_bool "result" '1'
+			else
+				print_json_bool "result" '0'
+			fi
 			;;
 		reload_config)
-			# dae init.d uses 'reload' to send SIGUSR1
-			cmd="/etc/init.d/${name} reload"
+			if /etc/init.d/"$name" reload >/dev/null 2>&1; then
+				print_json_bool "result" '1'
+			else
+				print_json_bool "result" '0'
+			fi
 			;;
 		update)
 			if [ -f "$DAE_LOCK" ]; then
@@ -67,7 +84,7 @@ set_init_action() {
 			( touch "$DAE_LOCK"
 			  sh "$INSTALLER" >> "$LOG" 2>&1
 			  rm -f "$DAE_LOCK" ) &
-			print_json_bool "result" '1'; return
+			print_json_bool "result" '1'
 			;;
 		update_geo)
 			if [ -f "$GEO_LOCK" ]; then
@@ -77,14 +94,34 @@ set_init_action() {
 			  sh "$INSTALLER" update-geoip  >> "$LOG" 2>&1
 			  sh "$INSTALLER" update-geosite >> "$LOG" 2>&1
 			  rm -f "$GEO_LOCK" ) &
-			print_json_bool "result" '1'; return
+			print_json_bool "result" '1'
+			;;
+		*)
+			print_json_bool "result" '0'
 			;;
 	esac
-	if [ -n "$cmd" ] && eval "$cmd" >/dev/null 2>&1; then
-		print_json_bool "result" '1'
-	else
-		print_json_bool "result" '0'
+}
+
+validate_config() {
+	local out rc
+	if [ ! -f "$PROG" ]; then
+		json_init
+		json_add_boolean 'valid' '0'
+		json_add_string 'message' 'dae binary not found'
+		json_dump; json_cleanup; return
 	fi
+	out="$("$PROG" validate -c "$CONF" 2>&1)"
+	rc=$?
+	json_init
+	if [ $rc -eq 0 ]; then
+		json_add_boolean 'valid' '1'
+		json_add_string 'message' 'Config is valid'
+	else
+		json_add_boolean 'valid' '0'
+		json_add_string 'message' "$out"
+	fi
+	json_dump
+	json_cleanup
 }
 
 case "$1" in
@@ -96,6 +133,8 @@ case "$1" in
 		json_add_object "setInitAction"
 			json_add_string 'name' "name"
 			json_add_string 'action' "action"
+		json_close_object
+		json_add_object "validateConfig"
 		json_close_object
 		json_dump
 		json_cleanup
@@ -116,6 +155,9 @@ case "$1" in
 				json_get_var action "action"
 				json_cleanup
 				set_init_action "$name" "$action"
+				;;
+			validateConfig)
+				validate_config
 				;;
 		esac
 		;;

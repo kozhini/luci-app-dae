@@ -2,7 +2,7 @@
 # Build luci-app-dae IPK without OpenWrt buildroot
 set -e
 
-VERSION="0.3.21"
+VERSION="0.3.32"
 PKG="luci-app-dae_${VERSION}-1_all"
 DIR="$(cd "$(dirname "$0")"; pwd)"
 BUILD="/tmp/_luci-app-dae-build"

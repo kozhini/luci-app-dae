@@ -266,6 +266,77 @@ install_dae() {
     rm -f "dae-linux-${MACHINE}.zip"
     rm -rf "$tmp_dir"
     echo "${GREEN}dae installed → /usr/bin/dae${RESET}"
+    install_initd
+}
+
+install_initd() {
+    if [ -f /etc/init.d/dae ]; then
+        echo "${GREEN}init.d/dae already exists, skipping.${RESET}"
+        return
+    fi
+    echo "${GREEN}Installing /etc/init.d/dae...${RESET}"
+    mkdir -p /var/log/dae
+    cat > /etc/init.d/dae << 'INITD'
+#!/bin/sh /etc/rc.common
+
+USE_PROCD=1
+
+START=99
+STOP=10
+
+readonly NAME="dae"
+readonly PROG="/usr/bin/dae"
+readonly CONF="/etc/dae/config.dae"
+readonly LOG="/var/log/dae/dae.log"
+
+EXTRA_COMMANDS="reload_config"
+EXTRA_HELP="        reload_config   Reload $NAME config"
+
+start_service() {
+    config_load $NAME
+
+    mkdir -p /var/log/dae
+    $PROG validate -c $CONF >> $LOG 2>&1 || return 1
+
+    procd_open_instance $NAME
+        procd_set_param command $PROG
+        procd_append_param command run --logfile $LOG -c $CONF
+
+        local size
+        size=$(uci -q get ${NAME}.settings.logfile_maxsize)
+        size="${size:-1}"
+        if [ -n "$size" ] && [ "$size" -gt 0 ]; then
+            procd_append_param command --logfile-maxsize $size
+        fi
+
+        procd_set_param limits core="unlimited"
+        procd_set_param limits nofile="1000000 1000000"
+        procd_set_param respawn
+        procd_set_param stderr 1
+
+    procd_close_instance
+}
+
+restart() {
+    stop
+    start
+}
+
+reload_service() {
+    stop
+    start
+}
+
+service_triggers() {
+    procd_add_reload_trigger $NAME
+}
+
+reload_config() {
+    $PROG reload
+}
+INITD
+    chmod +x /etc/init.d/dae
+    echo "${GREEN}init.d/dae installed.${RESET}"
 }
 
 ## ── Config / completions ─────────────────────────────────────────────────────
