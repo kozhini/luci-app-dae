@@ -1,0 +1,122 @@
+#!/bin/sh
+
+readonly NAME="dae"
+readonly PROG="/usr/bin/dae"
+readonly LOG="/var/log/dae/dae.log"
+readonly INSTALLER="/usr/share/dae/installer.sh"
+readonly GEO_LOCK="/var/run/dae-geo-update.lock"
+readonly DAE_LOCK="/var/run/dae-update.lock"
+
+. /lib/functions.sh
+. /usr/share/libubox/jshn.sh
+
+is_enabled() { "/etc/init.d/${1}" enabled; }
+is_running() {
+	[ "$(ubus call service list "{ 'name': '$1' }" | \
+		jsonfilter -q -e "@['$1'].instances[*].running" | uniq)" = 'true' ]
+}
+get_version() { "$PROG" --version 2>/dev/null | awk 'NR==1{print $3}'; }
+print_json_bool() { json_init; json_add_boolean "$1" "$2"; json_dump; json_cleanup; }
+
+get_init_status() {
+	local name="$1"
+	local version
+	version="$(get_version)"
+	json_init
+	json_add_object "$name"
+	if is_enabled "$name"; then
+		json_add_boolean 'enabled' '1'
+	else
+		json_add_boolean 'enabled' '0'
+	fi
+	if is_running "$name"; then
+		json_add_boolean 'running' '1'
+	else
+		json_add_boolean 'running' '0'
+	fi
+	json_add_string 'version' "$version"
+	if [ -f "$GEO_LOCK" ]; then
+		json_add_boolean 'geo_updating' '1'
+	else
+		json_add_boolean 'geo_updating' '0'
+	fi
+	if [ -f "$DAE_LOCK" ]; then
+		json_add_boolean 'dae_updating' '1'
+	else
+		json_add_boolean 'dae_updating' '0'
+	fi
+	json_close_object
+	json_dump
+	json_cleanup
+}
+
+set_init_action() {
+	local name="$1" action="$2" cmd
+	case "$action" in
+		enable|disable|start|stop|restart)
+			cmd="/etc/init.d/${name} ${action}"
+			;;
+		reload_config)
+			# dae init.d uses 'reload' to send SIGUSR1
+			cmd="/etc/init.d/${name} reload"
+			;;
+		update)
+			if [ -f "$DAE_LOCK" ]; then
+				print_json_bool "result" '0'; return
+			fi
+			( touch "$DAE_LOCK"
+			  sh "$INSTALLER" >> "$LOG" 2>&1
+			  rm -f "$DAE_LOCK" ) &
+			print_json_bool "result" '1'; return
+			;;
+		update_geo)
+			if [ -f "$GEO_LOCK" ]; then
+				print_json_bool "result" '0'; return
+			fi
+			( touch "$GEO_LOCK"
+			  sh "$INSTALLER" update-geoip  >> "$LOG" 2>&1
+			  sh "$INSTALLER" update-geosite >> "$LOG" 2>&1
+			  rm -f "$GEO_LOCK" ) &
+			print_json_bool "result" '1'; return
+			;;
+	esac
+	if [ -n "$cmd" ] && eval "$cmd" >/dev/null 2>&1; then
+		print_json_bool "result" '1'
+	else
+		print_json_bool "result" '0'
+	fi
+}
+
+case "$1" in
+	list)
+		json_init
+		json_add_object "getInitStatus"
+			json_add_string 'name' "name"
+		json_close_object
+		json_add_object "setInitAction"
+			json_add_string 'name' "name"
+			json_add_string 'action' "action"
+		json_close_object
+		json_dump
+		json_cleanup
+		;;
+	call)
+		case "$2" in
+			getInitStatus)
+				read -r input
+				json_load "$input"
+				json_get_var name 'name'
+				json_cleanup
+				get_init_status "$name"
+				;;
+			setInitAction)
+				read -r input
+				json_load "$input"
+				json_get_var name "name"
+				json_get_var action "action"
+				json_cleanup
+				set_init_action "$name" "$action"
+				;;
+		esac
+		;;
+esac

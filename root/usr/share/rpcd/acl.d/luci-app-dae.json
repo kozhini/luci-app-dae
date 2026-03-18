@@ -1,0 +1,33 @@
+{
+	"luci-app-dae": {
+		"description": "Grant UCI access to LuCI app dae",
+		"read": {
+			"ubus": {
+				"luci.dae": [
+					"getInitStatus"
+				]
+			},
+			"file": {
+				"/etc/dae/config.dae": [ "read" ],
+				"/var/log/dae/dae.log": [ "read" ]
+			},
+			"uci": [
+				"dae"
+			]
+		},
+		"write": {
+			"ubus": {
+				"luci.dae": [
+					"setInitAction"
+				]
+			},
+			"file": {
+				"/etc/dae/config.dae": [ "write" ],
+				"/var/log/dae/dae.log": [ "write" ]
+			},
+			"uci": [
+				"dae"
+			]
+		}
+	}
+}

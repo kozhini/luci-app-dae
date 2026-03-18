@@ -1,0 +1,9 @@
+#!/bin/sh
+# Create UCI config section required by form.Map
+touch /etc/config/dae
+uci -q get dae.settings >/dev/null || {
+    uci set dae.settings=settings
+    uci commit dae
+}
+mkdir -p /etc/dae
+exit 0
