@@ -35,6 +35,9 @@ opkg install /tmp/luci-app-dae_0.3.32-1_all.ipk
 Works as-is. The installer will not overwrite `/etc/init.d/dae` if it already exists.  
 Use **Update dae** button to upgrade the binary independently of opkg.
 
+<img width="959" height="901" alt="Screenshot 2026-03-19 003442" src="https://github.com/user-attachments/assets/1d545592-229b-4655-9c3d-5ac884c77de5" />
+
+
 
 ## License
 
