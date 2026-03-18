@@ -4,8 +4,6 @@ LuCI app for [dae](https://github.com/daeuniverse/dae) — eBPF-based Linux high
 
 Tested on ImmortalWrt 24.10 / GL.iNet MT6000 (arm64).
 
-Fork of [Pacalini/luci-app-dae](https://github.com/Pacalini/luci-app-dae) with additional features.
-
 ## Features
 
 - Service status and control (Start / Restart / Stop / Enable / Disable)
@@ -29,7 +27,7 @@ Then click **Update Geo databases**, edit config, click **Save**.
 ## Upgrade from previous version
 
 ```sh
-opkg install --force-downgrade /tmp/luci-app-dae_0.3.32-1_all.ipk
+opkg install /tmp/luci-app-dae_0.3.32-1_all.ipk
 ```
 
 ## If dae is installed from repository
@@ -37,45 +35,6 @@ opkg install --force-downgrade /tmp/luci-app-dae_0.3.32-1_all.ipk
 Works as-is. The installer will not overwrite `/etc/init.d/dae` if it already exists.  
 Use **Update dae** button to upgrade the binary independently of opkg.
 
-## sysupgrade
-
-Add to `/etc/sysupgrade.conf` to preserve dae across firmware upgrades:
-
-```
-/usr/bin/dae
-/usr/share/dae
-/etc/dae
-```
-
-## Build IPK (no buildroot needed)
-
-```sh
-git clone https://github.com/YOUR_USERNAME/luci-app-dae
-cd luci-app-dae
-sh build.sh        # → dist/luci-app-dae_0.3.32-1_all.ipk
-```
-
-Requires: `sh`, `python3`, `tar`.
-
-## File structure
-
-```
-Makefile
-build.sh
-root/
-  etc/dae/config.dae                         Default config
-  etc/uci-defaults/90_dae                    UCI init
-  usr/libexec/rpcd/luci.dae                  RPC backend
-  usr/share/dae/installer.sh                 dae + geo + init.d installer
-  usr/share/luci/menu.d/luci-app-dae.json
-  usr/share/rpcd/acl.d/luci-app-dae.json
-www/
-  luci-static/resources/dae/
-    status.js                                Status + control + update buttons
-    log.js                                   Log viewer
-  luci-static/resources/view/dae/
-    overview.js                              Main view
-```
 
 ## License
 
