@@ -78,7 +78,7 @@ RPC.on("setInitAction", function(reply) {
 });
 
 var statusWidget = baseclass.extend({
-	render: function() {
+	render: function(pkgVersion) {
 		return Promise.all([
 			L.resolveDefault(getInitStatus(NAME), {}),
 			L.resolveDefault(checkKernelCompat(), {}),
@@ -87,15 +87,23 @@ var statusWidget = baseclass.extend({
 			var k = data[1] || {};
 
 			// ── Status ────────────────────────────────────────────────────
+			// "dae vX.Y.Z / luci-app-dae vA.B.C" on first line, run state on second
+			var versionLine = s.version
+				? (NAME + " " + s.version + (pkgVersion ? " / luci-app-dae v" + pkgVersion : ""))
+				: (NAME + " \u2014 " + _("not installed or not found") + (pkgVersion ? " / luci-app-dae v" + pkgVersion : ""));
+
+			var runStateEl = s.running
+				? E("span", { style: "color:green" }, _("Running"))
+				: E("span", { style: "color:red"  }, _("Inactive"));
+
+			var statusFieldChildren = [
+				E("div", { style: "font-size:.9em;color:var(--color-text-secondary, #888);margin-bottom:2px" }, versionLine),
+				E("div", {}, runStateEl),
+			];
+
 			var statusDiv = E("div", { class: "cbi-value" }, [
 				E("label", { class: "cbi-value-title" }, _("Service Status")),
-				E("div", { class: "cbi-value-field" }, [
-					E("div", {}, NAME + (s.version ? " " + s.version : " \u2014 " + _("not installed or not found"))),
-					E("div", {}, s.running
-						? E("span", { style: "color:green" }, _("Running"))
-						: E("span", { style: "color:red"  }, _("Inactive"))
-					),
-				]),
+				E("div", { class: "cbi-value-field" }, statusFieldChildren),
 			]);
 
 			// ── Compatibility (kernel + system) ───────────────────────────
@@ -103,11 +111,9 @@ var statusWidget = baseclass.extend({
 			var warnings = [];
 
 			if (k.kernel_version) {
-				// Kernel version
 				if (!k.kernel_version_ok)
 					errors.push(_("kernel >= 5.17 required (current: %s)").format(k.kernel_version));
 
-				// Kernel feature checks via /sys
 				var required = {
 					"BPF_SYSCALL":     _("BPF syscall (/sys/fs/bpf)"),
 					"DEBUG_INFO_BTF":  _("BTF support (/sys/kernel/btf/vmlinux)"),
@@ -120,7 +126,6 @@ var statusWidget = baseclass.extend({
 					if (k[key] === 0) errors.push(required[key]);
 				});
 
-				// Missing kmod packages
 				var kmods = {
 					"kmod_veth":             "kmod-veth",
 					"kmod_sched_core":       "kmod-sched-core",
@@ -132,7 +137,6 @@ var statusWidget = baseclass.extend({
 					if (k[key] === 0) warnings.push(_("Missing module: %s").format(kmods[key]));
 				});
 
-				// System checks
 				if (k.ip_forward === false)
 					warnings.push(_("IP forwarding disabled (net.ipv4.ip_forward=0)"));
 				if (k.nft === false)
