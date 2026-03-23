@@ -9,6 +9,8 @@ readonly GEO_LOCK="/var/run/dae-geo-update.lock"
 readonly DAE_LOCK="/var/run/dae-update.lock"
 readonly GEOIP="/usr/share/dae/geoip.dat"
 readonly GEOSITE="/usr/share/dae/geosite.dat"
+readonly DAE_FAIL="${DAE_LOCK}.failed"
+readonly GEO_FAIL="${GEO_LOCK}.failed"
 
 . /lib/functions.sh
 . /usr/share/libubox/jshn.sh
@@ -48,6 +50,11 @@ get_init_status() {
 	else
 		json_add_boolean 'dae_updating' '0'
 	fi
+	local dae_failed=0 geo_failed=0
+	[ -f "$DAE_FAIL" ] && dae_failed=1
+	[ -f "$GEO_FAIL" ] && geo_failed=1
+	json_add_boolean 'dae_update_failed' "$dae_failed"
+	json_add_boolean 'geo_update_failed' "$geo_failed"
 	# Время обновления geo баз (unix timestamp)
 	local geoip_mtime=0 geosite_mtime=0
 	[ -f "$GEOIP" ]    && geoip_mtime="$(date -r "$GEOIP" +%s 2>/dev/null || echo 0)"
@@ -71,7 +78,9 @@ set_init_action() {
 			fi
 			;;
 		reload_config)
-			if /etc/init.d/"$name" reload >/dev/null 2>&1; then
+			if /etc/init.d/"$name" reload_config >/dev/null 2>&1; then
+				print_json_bool "result" '1'
+			elif /etc/init.d/"$name" reload >/dev/null 2>&1; then
 				print_json_bool "result" '1'
 			else
 				print_json_bool "result" '0'
@@ -81,19 +90,30 @@ set_init_action() {
 			if [ -f "$DAE_LOCK" ]; then
 				print_json_bool "result" '0'; return
 			fi
+			rm -f "$DAE_FAIL"
 			( touch "$DAE_LOCK"
+			  mkdir -p "$(dirname "$LOG")"
 			  sh "$INSTALLER" >> "$LOG" 2>&1
-			  rm -f "$DAE_LOCK" ) &
+			  rc=$?
+			  rm -f "$DAE_LOCK"
+			  [ $rc -eq 0 ] || touch "$DAE_FAIL" ) &
 			print_json_bool "result" '1'
 			;;
 		update_geo)
 			if [ -f "$GEO_LOCK" ]; then
 				print_json_bool "result" '0'; return
 			fi
+			rm -f "$GEO_FAIL"
 			( touch "$GEO_LOCK"
+			  mkdir -p "$(dirname "$LOG")"
 			  sh "$INSTALLER" update-geoip  >> "$LOG" 2>&1
-			  sh "$INSTALLER" update-geosite >> "$LOG" 2>&1
-			  rm -f "$GEO_LOCK" ) &
+			  rc=$?
+			  if [ $rc -eq 0 ]; then
+				  sh "$INSTALLER" update-geosite >> "$LOG" 2>&1
+				  rc=$?
+			  fi
+			  rm -f "$GEO_LOCK"
+			  [ $rc -eq 0 ] || touch "$GEO_FAIL" ) &
 			print_json_bool "result" '1'
 			;;
 		*)

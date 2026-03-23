@@ -14,7 +14,6 @@ const setInitAction = rpc.declare({
 	object: "luci." + NAME,
 	method: "setInitAction",
 	params: ["name", "action"],
-	expect: { result: false },
 });
 
 const validateConfig = rpc.declare({
@@ -24,9 +23,20 @@ const validateConfig = rpc.declare({
 });
 
 function writeConfig(section_id, value) {
-	return fs.write(CONF, (value || '').trim().replace(/\r\n/g, '\n') + '\n')
+	// Preserve leading/trailing spaces and formatting as OpenWrt configs sometimes
+	// rely on indentation/comments; only normalize line endings and ensure LF.
+	var content = (value || '').replace(/\r\n/g, '\n');
+	if (content.length === 0 || content[content.length - 1] !== '\n')
+		content += '\n';
+
+	return fs.write(CONF, content)
 		.then(function() {
-			setInitAction(NAME, "reload_config");
+			return setInitAction(NAME, "reload_config");
+		})
+		.then(function(res) {
+			var ok = (res && typeof res === 'object') ? res.result : res;
+			if (ok === false)
+				throw new Error(_('Failed to reload dae service.'));
 			location.reload();
 		});
 }
@@ -47,7 +57,8 @@ return view.extend({
 		o = s.taboption('config', form.TextValue, '_config');
 		o.rows = 32;
 		o.load = function(section_id) {
-			return fs.trimmed(CONF);
+			return fs.read_direct(CONF)
+				.catch(function() { return ''; });
 		};
 		o.write = writeConfig;
 		o.remove = writeConfig;

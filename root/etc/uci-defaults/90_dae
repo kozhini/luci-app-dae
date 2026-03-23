@@ -1,10 +1,15 @@
 #!/bin/sh
 # Create UCI config section required by form.Map
 touch /etc/config/dae
-uci -q get dae.settings >/dev/null || {
-    uci set dae.settings=settings
-    uci commit dae
-}
+
+# LuCI side expects:
+# - form.NamedSection('settings', 'settings')  (section name = 'settings', type = 'settings')
+# - init.d reads: uci get dae.settings.logfile_maxsize
+# So we must ensure the UCI section exists.
+if ! uci -q show dae 2>/dev/null | grep -q "config settings 'settings'"; then
+    uci -q add dae settings settings >/dev/null 2>&1 || true
+    uci -q commit dae >/dev/null 2>&1 || true
+fi
 mkdir -p /etc/dae
 [ -f /etc/dae/config.dae ] && chmod 600 /etc/dae/config.dae
 exit 0

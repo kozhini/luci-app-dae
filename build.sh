@@ -20,7 +20,7 @@ chmod +x "$BUILD/data/usr/libexec/rpcd/luci.dae" \
 cat > "$BUILD/control/control" << EOF
 Package: luci-app-dae
 Version: ${VERSION}-1
-Depends: libc, luci-base, dae, curl, ca-bundle
+Depends: libc, luci-base, dae, curl, unzip, ca-bundle
 License: AGPL-3.0
 Section: luci
 Architecture: all

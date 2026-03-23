@@ -19,7 +19,6 @@ var _setInitAction = rpc.declare({
 	object: "luci." + NAME,
 	method: "setInitAction",
 	params: ["name", "action"],
-	expect: { result: false },
 });
 
 var RPC = {
@@ -186,10 +185,17 @@ var statusWidget = baseclass.extend({
 							clearInterval(timer);
 							btn.disabled = false;
 							statusEl.textContent = "";
-							if (lockField === "dae_updating") {
-								ui.addNotification(null, E("p", "\u2713 " + doneMsg + " \u2014 " + _("Reload the page to apply.")), "info");
+							var st = (d && d[NAME]) || {};
+							var failedField = lockField === "dae_updating" ? "dae_update_failed" : "geo_update_failed";
+							if (st[failedField]) {
+								ui.addNotification(null,
+									E("p", "\u2717 " + _("Update failed. Check /var/log/dae/dae.log")),
+									"error");
+							} else if (lockField === "dae_updating") {
+								ui.addNotification(null,
+									E("p", "\u2713 " + doneMsg + " \u2014 " + _("Reload the page to apply.")),
+									"info");
 							} else {
-								var st = (d && d[NAME]) || {};
 								var ts = Math.min(st.geoip_mtime || 0, st.geosite_mtime || 0);
 								if (ts && geoDateEl) geoDateEl.textContent = _("Updated: %s").format(fmtDate(ts));
 								ui.addNotification(null, E("p", "\u2713 " + doneMsg), "info");
@@ -216,7 +222,8 @@ var statusWidget = baseclass.extend({
 					click: function() {
 						btn.disabled = true;
 						_setInitAction(NAME, action).then(function(res) {
-							if (!res) {
+							var ok = (res && typeof res === 'object') ? res.result : res;
+							if (!ok) {
 								ui.addNotification(null, E("p", _("Update is already in progress.")), "warning");
 								btn.disabled = false;
 								return;

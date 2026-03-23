@@ -495,7 +495,9 @@ cd /tmp || { echo "${YELLOW}Cannot cd to /tmp${RESET}"; exit 1; }
 trap 'cd "$current_dir"' EXIT INT TERM
 
 if [ $# -eq 0 ]; then
-    allow_prereleases='yes'
+    # Default behavior for "install/update" should follow stable releases.
+    # Pre-releases are enabled only via explicit "install-prerelease".
+    allow_prereleases=''
     should_we_install_dae
     exit 0
 fi
