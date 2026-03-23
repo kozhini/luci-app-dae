@@ -9,6 +9,7 @@
 
 const NAME = "dae";
 const CONF = "/etc/dae/config.dae";
+const PKG_VERSION = "0.3.50";
 
 const setInitAction = rpc.declare({
 	object: "luci." + NAME,
@@ -23,8 +24,6 @@ const validateConfig = rpc.declare({
 });
 
 function writeConfig(section_id, value) {
-	// Preserve leading/trailing spaces and formatting as OpenWrt configs sometimes
-	// rely on indentation/comments; only normalize line endings and ensure LF.
 	var content = (value || '').replace(/\r\n/g, '\n');
 	if (content.length === 0 || content[content.length - 1] !== '\n')
 		content += '\n';
@@ -47,8 +46,7 @@ return view.extend({
 
 		stat = new status.getStatus();
 
-		m = new form.Map('dae', 'dae',
-			_('eBPF-based Linux high-performance transparent proxy solution.'));
+		m = new form.Map('dae', null, null);
 
 		s = m.section(form.NamedSection, 'settings', 'settings');
 
@@ -68,7 +66,14 @@ return view.extend({
 		o = s.taboption('log', form.DummyValue, '_dae_logview');
 		o.render = L.bind(log.getRuntimeLog, this);
 
-		return Promise.all([stat.render(), m.render()]);
+		return Promise.all([stat.render(PKG_VERSION), m.render()]).then(function(nodes) {
+			var header = E('div', { 'class': 'cbi-map' }, [
+				E('h2', { 'style': 'margin-bottom:4px' }, _('dae')),
+				E('div', { 'class': 'cbi-map-descr', 'style': 'margin-bottom:0' },
+					_('eBPF-based Linux high-performance transparent proxy solution.')),
+			]);
+			return E('div', {}, [header, nodes[0], nodes[1]]);
+		});
 	},
 
 	handleSave: function(ev) {
