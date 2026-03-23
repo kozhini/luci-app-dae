@@ -24,36 +24,10 @@ opkg install /tmp/luci-app-dae_0.3.50-1_all.ipk
 Open **Services → dae**, click **Update dae**, wait for completion, reload the page.  
 Then click **Update Geo databases**, edit config, click **Save**.
 
-## Upgrade from previous version
-
-```sh
-opkg install --force-downgrade /tmp/luci-app-dae_0.3.50-1_all.ipk
-```
-
 ## If dae is installed from repository
 
 Works as-is. The installer will not overwrite `/etc/init.d/dae` if it already exists.  
 Use **Update dae** button to upgrade the binary independently of opkg.
-
-## sysupgrade
-
-Add to `/etc/sysupgrade.conf` to preserve dae across firmware upgrades:
-
-```
-/usr/bin/dae
-/usr/share/dae
-/etc/dae
-```
-
-## Build IPK (no buildroot needed)
-
-```sh
-git clone https://github.com/YOUR_USERNAME/luci-app-dae
-cd luci-app-dae
-sh build.sh        # → dist/luci-app-dae_0.3.50-1_all.ipk
-```
-
-Requires: `sh`, `python3`, `tar`.
 
 ## File structure
 
