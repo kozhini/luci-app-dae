@@ -17,6 +17,10 @@ chmod +x "$BUILD/data/usr/libexec/rpcd/luci.dae" \
          "$BUILD/data/etc/uci-defaults/90_dae" \
          "$BUILD/data/usr/share/dae/installer.sh"
 
+# Patch PKG_VERSION in overview.js to match current build VERSION
+sed -i "s/const PKG_VERSION = \"[^\"]*\"/const PKG_VERSION = \"${VERSION}\"/" \
+    "$BUILD/data/www/luci-static/resources/view/dae/overview.js"
+
 cat > "$BUILD/control/control" << EOF
 Package: luci-app-dae
 Version: ${VERSION}-1
