@@ -18,7 +18,7 @@ Tested on ImmortalWrt 24.10 / GL.iNet MT6000 (arm64).
 ```sh
 opkg update
 opkg install curl ca-bundle
-opkg install /tmp/luci-app-dae_0.3.32-1_all.ipk
+opkg install /tmp/luci-app-dae_0.3.50-1_all.ipk
 ```
 
 Open **Services → dae**, click **Update dae**, wait for completion, reload the page.  
@@ -27,7 +27,7 @@ Then click **Update Geo databases**, edit config, click **Save**.
 ## Upgrade from previous version
 
 ```sh
-opkg install --force-downgrade /tmp/luci-app-dae_0.3.32-1_all.ipk
+opkg install --force-downgrade /tmp/luci-app-dae_0.3.50-1_all.ipk
 ```
 
 ## If dae is installed from repository
@@ -50,7 +50,7 @@ Add to `/etc/sysupgrade.conf` to preserve dae across firmware upgrades:
 ```sh
 git clone https://github.com/YOUR_USERNAME/luci-app-dae
 cd luci-app-dae
-sh build.sh        # → dist/luci-app-dae_0.3.32-1_all.ipk
+sh build.sh        # → dist/luci-app-dae_0.3.50-1_all.ipk
 ```
 
 Requires: `sh`, `python3`, `tar`.
