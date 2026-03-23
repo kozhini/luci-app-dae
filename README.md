@@ -29,25 +29,6 @@ Then click **Update Geo databases**, edit config, click **Save**.
 Works as-is. The installer will not overwrite `/etc/init.d/dae` if it already exists.  
 Use **Update dae** button to upgrade the binary independently of opkg.
 
-## File structure
-
-```
-Makefile
-build.sh
-root/
-  etc/dae/config.dae                         Default config
-  etc/uci-defaults/90_dae                    UCI init
-  usr/libexec/rpcd/luci.dae                  RPC backend
-  usr/share/dae/installer.sh                 dae + geo + init.d installer
-  usr/share/luci/menu.d/luci-app-dae.json
-  usr/share/rpcd/acl.d/luci-app-dae.json
-www/
-  luci-static/resources/dae/
-    status.js                                Status + control + update buttons
-    log.js                                   Log viewer
-  luci-static/resources/view/dae/
-    overview.js                              Main view
-```
 
 <img width="1074" height="526" alt="Screenshot 2026-03-20 005702" src="https://github.com/user-attachments/assets/3a539e32-65e7-477f-8ee0-3c2e65f9a685" />
 
