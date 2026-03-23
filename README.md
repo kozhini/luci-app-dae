@@ -4,8 +4,6 @@ LuCI app for [dae](https://github.com/daeuniverse/dae) — eBPF-based Linux high
 
 Tested on ImmortalWrt 24.10 / GL.iNet MT6000 (arm64).
 
-Fork of [Pacalini/luci-app-dae](https://github.com/Pacalini/luci-app-dae) with additional features.
-
 ## Features
 
 - Service status and control (Start / Restart / Stop / Enable / Disable)
@@ -76,6 +74,9 @@ www/
   luci-static/resources/view/dae/
     overview.js                              Main view
 ```
+
+<img width="1074" height="526" alt="Screenshot 2026-03-20 005702" src="https://github.com/user-attachments/assets/3a539e32-65e7-477f-8ee0-3c2e65f9a685" />
+
 
 ## License
 
