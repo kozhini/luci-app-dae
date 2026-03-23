@@ -1,0 +1,249 @@
+#!/bin/sh
+
+readonly NAME="dae"
+readonly PROG="/usr/bin/dae"
+readonly CONF="/etc/dae/config.dae"
+readonly LOG="/var/log/dae/dae.log"
+readonly INSTALLER="/usr/share/dae/installer.sh"
+readonly GEO_LOCK="/var/run/dae-geo-update.lock"
+readonly DAE_LOCK="/var/run/dae-update.lock"
+readonly GEOIP="/usr/share/dae/geoip.dat"
+readonly GEOSITE="/usr/share/dae/geosite.dat"
+
+. /lib/functions.sh
+. /usr/share/libubox/jshn.sh
+
+is_enabled() { "/etc/init.d/${1}" enabled; }
+is_running() {
+	[ "$(ubus call service list "{ 'name': '$1' }" | \
+		jsonfilter -q -e "@['$1'].instances[*].running" | uniq)" = 'true' ]
+}
+get_version() { "$PROG" --version 2>/dev/null | awk 'NR==1{print $3}'; }
+print_json_bool() { json_init; json_add_boolean "$1" "$2"; json_dump; json_cleanup; }
+
+get_init_status() {
+	local name="$1"
+	local version
+	version="$(get_version)"
+	json_init
+	json_add_object "$name"
+	if is_enabled "$name"; then
+		json_add_boolean 'enabled' '1'
+	else
+		json_add_boolean 'enabled' '0'
+	fi
+	if is_running "$name"; then
+		json_add_boolean 'running' '1'
+	else
+		json_add_boolean 'running' '0'
+	fi
+	json_add_string 'version' "$version"
+	if [ -f "$GEO_LOCK" ]; then
+		json_add_boolean 'geo_updating' '1'
+	else
+		json_add_boolean 'geo_updating' '0'
+	fi
+	if [ -f "$DAE_LOCK" ]; then
+		json_add_boolean 'dae_updating' '1'
+	else
+		json_add_boolean 'dae_updating' '0'
+	fi
+	# Время обновления geo баз (unix timestamp)
+	local geoip_mtime=0 geosite_mtime=0
+	[ -f "$GEOIP" ]    && geoip_mtime="$(date -r "$GEOIP" +%s 2>/dev/null || echo 0)"
+	[ -f "$GEOSITE" ]  && geosite_mtime="$(date -r "$GEOSITE" +%s 2>/dev/null || echo 0)"
+	json_add_int 'geoip_mtime' "$geoip_mtime"
+	json_add_int 'geosite_mtime' "$geosite_mtime"
+	json_close_object
+	json_dump
+	json_cleanup
+}
+
+set_init_action() {
+	local name="$1" action="$2"
+	[ "$name" = "$NAME" ] || { print_json_bool "result" '0'; return; }
+	case "$action" in
+		enable|disable|start|stop|restart)
+			if /etc/init.d/"$name" "$action" >/dev/null 2>&1; then
+				print_json_bool "result" '1'
+			else
+				print_json_bool "result" '0'
+			fi
+			;;
+		reload_config)
+			if /etc/init.d/"$name" reload >/dev/null 2>&1; then
+				print_json_bool "result" '1'
+			else
+				print_json_bool "result" '0'
+			fi
+			;;
+		update)
+			if [ -f "$DAE_LOCK" ]; then
+				print_json_bool "result" '0'; return
+			fi
+			( touch "$DAE_LOCK"
+			  sh "$INSTALLER" >> "$LOG" 2>&1
+			  rm -f "$DAE_LOCK" ) &
+			print_json_bool "result" '1'
+			;;
+		update_geo)
+			if [ -f "$GEO_LOCK" ]; then
+				print_json_bool "result" '0'; return
+			fi
+			( touch "$GEO_LOCK"
+			  sh "$INSTALLER" update-geoip  >> "$LOG" 2>&1
+			  sh "$INSTALLER" update-geosite >> "$LOG" 2>&1
+			  rm -f "$GEO_LOCK" ) &
+			print_json_bool "result" '1'
+			;;
+		*)
+			print_json_bool "result" '0'
+			;;
+	esac
+}
+
+validate_config() {
+	# $1 — optional content to validate; if empty, validate file on disk
+	local content="$1" out rc tmp
+	if [ ! -f "$PROG" ]; then
+		json_init
+		json_add_boolean 'valid' '0'
+		json_add_string 'message' 'dae binary not found'
+		json_dump; json_cleanup; return
+	fi
+	tmp="/tmp/dae-validate-$$.dae"
+	if [ -n "$content" ]; then
+		printf '%s' "$content" > "$tmp"
+	else
+		cp "$CONF" "$tmp" 2>/dev/null
+	fi
+	chmod 600 "$tmp"
+	out="$("$PROG" validate -c "$tmp" 2>&1)"
+	rc=$?
+	rm -f "$tmp"
+	json_init
+	if [ $rc -eq 0 ]; then
+		json_add_boolean 'valid' '1'
+		json_add_string 'message' 'Config is valid'
+	else
+		json_add_boolean 'valid' '0'
+		json_add_string 'message' "$out"
+	fi
+	json_dump
+	json_cleanup
+}
+
+check_kernel_compat() {
+	local kver kmaj kmin kver_ok
+	kver="$(uname -r | cut -d. -f1-2)"
+	kmaj="$(echo "$kver" | cut -d. -f1)"
+	kmin="$(echo "$kver" | cut -d. -f2)"
+	kver_ok=0
+	[ "$kmaj" -gt 5 ] && kver_ok=1
+	[ "$kmaj" -eq 5 ] && [ "$kmin" -ge 17 ] && kver_ok=1
+
+	# Check feature by /sys path or file existence
+	sys_check() {
+		[ -e "$1" ] && echo "1" || echo "0"
+	}
+
+	# Check kernel module: loaded (lsmod) OR available on disk OR /sys/module present
+	kmod_check() {
+		lsmod 2>/dev/null | grep -q "^${1} " && echo "1" && return
+		[ -d "/sys/module/${1}" ] && echo "1" && return
+		find /lib/modules/"$(uname -r)" -name "${1}.ko" 2>/dev/null | grep -q . && echo "1" && return
+		echo "0"
+	}
+
+	json_init
+	json_add_string  "kernel_version"    "$(uname -r)"
+	json_add_boolean "kernel_version_ok" "$kver_ok"
+	# BPF syscall — bpf fs mounted
+	json_add_int "BPF_SYSCALL"        "$(sys_check /sys/fs/bpf)"
+	# BTF — vmlinux BTF present (needed for CO-RE)
+	json_add_int "DEBUG_INFO_BTF"     "$(sys_check /sys/kernel/btf/vmlinux)"
+	# Traffic control modules
+	json_add_int "NET_CLS_BPF"        "$(kmod_check cls_bpf)"
+	json_add_int "NET_SCH_INGRESS"    "$(kmod_check sch_ingress)"
+	# cgroup v2
+	json_add_int "CGROUPS"            "$(sys_check /sys/fs/cgroup/cgroup.controllers)"
+	# kprobes — tracing dir
+	# kprobes path varies: check both locations
+	local kprobes_ok=0
+	[ -e /sys/kernel/tracing/kprobe_events ] && kprobes_ok=1
+	[ -e /sys/kernel/debug/tracing/kprobe_events ] && kprobes_ok=1
+	json_add_int "KPROBES" "$kprobes_ok"
+	# Kernel modules
+	json_add_int "kmod_veth"              "$(kmod_check veth)"
+	json_add_int "kmod_sched_bpf"         "$(kmod_check cls_bpf)"
+	json_add_int "kmod_sched_core"        "$(kmod_check sch_ingress)"
+	json_add_int "kmod_xdp_sockets_diag"  "$(kmod_check xsk_diag)"
+	# nft_bridge: check by file pattern
+	local nft_bridge_ok=0
+	[ -d /sys/module/nft_bridge ] && nft_bridge_ok=1
+	ls /lib/modules/"$(uname -r)"/nft_*bridge*.ko >/dev/null 2>&1 && nft_bridge_ok=1
+	json_add_int "kmod_nft_bridge"        "$nft_bridge_ok"
+	# IP forwarding
+	local ip_forward=0
+	[ "$(cat /proc/sys/net/ipv4/ip_forward 2>/dev/null)" = "1" ] && ip_forward=1
+	json_add_boolean "ip_forward" "$ip_forward"
+	# nftables
+	local nft_ok=0
+	command -v nft >/dev/null 2>&1 && nft_ok=1
+	json_add_boolean "nft" "$nft_ok"
+	# Free memory (kB)
+	local mem_free=0
+	mem_free="$(awk '/MemAvailable/{print $2}' /proc/meminfo 2>/dev/null || echo 0)"
+	json_add_int "mem_free_kb" "$mem_free"
+	json_dump
+	json_cleanup
+}
+
+case "$1" in
+	list)
+		json_init
+		json_add_object "getInitStatus"
+			json_add_string 'name' "name"
+		json_close_object
+		json_add_object "setInitAction"
+			json_add_string 'name' "name"
+			json_add_string 'action' "action"
+		json_close_object
+		json_add_object "validateConfig"
+			json_add_string 'content' "content"
+		json_close_object
+		json_add_object "checkKernelCompat"
+		json_close_object
+		json_dump
+		json_cleanup
+		;;
+	call)
+		case "$2" in
+			getInitStatus)
+				read -r input
+				json_load "$input"
+				json_get_var name 'name'
+				json_cleanup
+				get_init_status "$name"
+				;;
+			setInitAction)
+				read -r input
+				json_load "$input"
+				json_get_var name "name"
+				json_get_var action "action"
+				json_cleanup
+				set_init_action "$name" "$action"
+				;;
+			validateConfig)
+				read -r input
+				json_load "$input"
+				json_get_var content 'content'
+				json_cleanup
+				validate_config "$content"
+				;;
+			checkKernelCompat)
+				check_kernel_compat
+				;;
+		esac
+		;;
+esac
