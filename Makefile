@@ -3,7 +3,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-dae
-PKG_VERSION:=0.3.49
+PKG_VERSION:=0.3.50
 PKG_RELEASE:=1
 
 LUCI_TITLE:=LuCI app for dae
