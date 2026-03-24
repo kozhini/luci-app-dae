@@ -23,8 +23,8 @@ Then click **Update Geo databases**, edit config, click **Save**.
 Works as-is. The installer will not overwrite `/etc/init.d/dae` if it already exists.  
 Use **Update dae** button to upgrade the binary independently of opkg.
 
+<img width="1012" height="883" alt="Screenshot 2026-03-20 005702" src="https://github.com/user-attachments/assets/cdc17790-8ba8-4d67-8a7a-8efc98d027cb" />
 
-<img width="1074" height="526" alt="Screenshot 2026-03-20 005702" src="https://github.com/user-attachments/assets/3a539e32-65e7-477f-8ee0-3c2e65f9a685" />
 
 
 ## License
