@@ -1,0 +1,153 @@
+global {
+    # === OpenWrt интерфейсы ===
+    lan_interface: br-lan
+    wan_interface: auto
+
+    # === TProxy ===
+    tproxy_port: 12345
+    tproxy_port_protect: true
+
+    # === режим соединения ===
+    # domain++ резолвит домен на стороне прокси — важно против DNS-спуфинга РКН
+    dial_mode: domain++
+
+    # === системные параметры ===
+    log_level: warn
+    auto_config_kernel_parameter: true
+    disable_waiting_network: false
+    allow_insecure: false
+
+    # === sniffing ===
+    sniffing_timeout: 100ms
+
+    # === health check ===
+    tcp_check_url: 'http://cp.cloudflare.com,1.1.1.1'
+    tcp_check_http_method: HEAD
+    udp_check_dns: 'dns.google.com:53,8.8.8.8'
+    check_interval: 30s
+    check_tolerance: 100ms
+
+    # Reality не нуждается в utls на уровне dae
+    mptcp: false
+    tls_implementation: tls
+    utls_imitate: chrome_auto
+    tls_fragment: false
+    tls_fragment_length: '50-100'
+    tls_fragment_interval: '10-20'
+}
+
+subscription {
+    mysub: 'https://LINK'
+}
+
+group {
+    proxy {
+        filter: subtag(mysub)
+        policy: min_moving_avg
+    }
+}
+
+dns {
+    upstream {
+        nextdns: 'https://dns.nextdns.io/XXXXXXX'
+        comss:   'https://dns.comss.one/dns-query'
+        malw:    'https://dns.malw.link/dns-query'
+    }
+
+    routing {
+        request {
+            # ECH: отклоняем HTTPS-записи, чтобы не утекал ECH в ClientHello
+            qtype(https) -> reject
+
+            # Российские домены резолвим через nextdns без фильтрации РКН
+            qname(geosite:ru-available-only-inside) -> nextdns
+
+            fallback: nextdns
+        }
+
+        response {
+            # Принимаем любой ответ от nextdns как есть
+            upstream(nextdns) -> accept
+
+            fallback: accept
+        }
+    }
+}
+
+routing {
+
+    ################################
+    # MUST DIRECT — системный трафик роутера
+    ################################
+
+    dip(224.0.0.0/3, 'ff00::/8') -> direct(must)   # multicast
+    dip(geoip:private)            -> direct(must)   # LAN/loopback
+    domain(geosite:private)       -> direct(must)   # .local и т.д.
+    pname(dnsmasq, odhcpd, uhttpd) -> must_direct   # демоны роутера
+
+
+    ################################
+    # Блокировки РКН
+    ################################
+
+    domain(geosite:refilter) -> proxy
+    dip(geoip:re-filter)     -> proxy
+
+
+    ################################
+    # Российские сайты — напрямую
+    ################################
+
+    domain(geosite:ru-available-only-inside) -> direct
+    domain(geosite:category-ru)              -> direct
+
+
+    ################################
+    # Google / YouTube — через zapret напрямую
+    ################################
+
+    domain(geosite:youtube) -> direct
+    domain(geosite:google)  -> direct
+
+
+    ################################
+    # AI сервисы
+    ################################
+
+    domain(geosite:category-ai-!cn) -> proxy
+
+
+    ################################
+    # Социальные сети и мессенджеры
+    ################################
+
+    domain(geosite:telegram) -> proxy
+    dip(geoip:telegram)      -> proxy
+
+    domain(geosite:twitter)  -> proxy
+    domain(geosite:meta)     -> proxy   # включает WhatsApp, Instagram, Facebook
+
+
+    ################################
+    # Стриминг
+    ################################
+
+    domain(geosite:netflix) -> proxy
+    domain(geosite:disney)  -> proxy
+    domain(geosite:twitch)  -> proxy
+
+
+    ################################
+    # Прочее
+    ################################
+
+    l4proto(udp) && dport(123) -> direct   # NTP
+    dscp(0x4) -> direct                    # torrent (low-priority marking)
+
+
+    ################################
+    # Fallback — всё остальное через прокси
+    ################################
+
+    fallback: proxy
+}
