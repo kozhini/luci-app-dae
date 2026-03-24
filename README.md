@@ -15,12 +15,6 @@ Tested on ImmortalWrt 24.10 / GL.iNet MT6000 (arm64).
 
 ## Installation (clean system, no dae required)
 
-```sh
-opkg update
-opkg install curl ca-bundle
-opkg install /tmp/luci-app-dae_0.3.50-1_all.ipk
-```
-
 Open **Services → dae**, click **Update dae**, wait for completion, reload the page.  
 Then click **Update Geo databases**, edit config, click **Save**.
 
