@@ -261,7 +261,7 @@ install_dae() {
     tmp_dir="$(mktemp -d /tmp/dae.XXXXXX)"
     echo "${GREEN}Extracting dae...${RESET}"
     unzip -q "dae-linux-${MACHINE}.zip" -d "$tmp_dir"
-    cp "$tmp_dir/dae-linux-${MACHINE}" /usr/bin/dae
+    find "$tmp_dir" -name "dae-linux-${MACHINE}" -exec cp {} /usr/bin/dae \;
     chmod +x /usr/bin/dae
     rm -f "dae-linux-${MACHINE}.zip"
     rm -rf "$tmp_dir"
