@@ -258,7 +258,7 @@ install_daed() {
     tmp_dir="$(mktemp -d /tmp/daed.XXXXXX)"
     echo "${GREEN}Extracting daed...${RESET}"
     unzip -q "daed-linux-${MACHINE}.zip" -d "$tmp_dir"
-    cp "$tmp_dir/daed-linux-${MACHINE}" /usr/bin/daed
+    find "$tmp_dir" -name "daed-linux-${MACHINE}" -exec cp {} /usr/bin/daed \;
     chmod +x /usr/bin/daed
     rm -f "daed-linux-${MACHINE}.zip"
     rm -rf "$tmp_dir"
